@@ -11,16 +11,7 @@ import bleach
 register = template.Library()
 
 
-@register.filter
-def markdownify(text):
-
-    # Get the settings or set defaults if not set
-
-    # Bleach settings
-    whitelist_tags = getattr(settings, 'MARKDOWNIFY_WHITELIST_TAGS', bleach.sanitizer.ALLOWED_TAGS)
-    whitelist_attrs = getattr(settings, 'MARKDOWNIFY_WHITELIST_ATTRS', bleach.sanitizer.ALLOWED_ATTRIBUTES)
-    whitelist_styles = getattr(settings, 'MARKDOWNIFY_WHITELIST_STYLES', bleach.sanitizer.ALLOWED_STYLES)
-    whitelist_protocols = getattr(settings, 'MARKDOWNIFY_WHITELIST_PROTOCOLS', bleach.sanitizer.ALLOWED_PROTOCOLS)
+def custom_markdownify(whitelist_tags, whitelist_attrs, whitelist_styles, whitelist_protocols):
 
     # Markdown settings
     strip = getattr(settings, 'MARKDOWNIFY_STRIP', True)
@@ -37,25 +28,47 @@ def markdownify(text):
         linkifyfilter = bleach.linkifier.LinkifyFilter
 
         linkify = [partial(linkifyfilter,
-                callbacks=linkify_callbacks,
-                skip_tags=linkify_skip_tags,
-                parse_email=linkify_parse_email
-                )]
+                           callbacks=linkify_callbacks,
+                           skip_tags=linkify_skip_tags,
+                           parse_email=linkify_parse_email
+                           )]
 
-    # Convert markdown to html
-    html = markdown.markdown(text, extensions=extensions)
 
-    # Sanitize html if wanted
-    if getattr(settings, 'MARKDOWNIFY_BLEACH', True):
+    def markdownify(text):
+        # Convert markdown to html
+        html = markdown.markdown(text, extensions=extensions)
 
-        cleaner = bleach.Cleaner(tags=whitelist_tags,
-                                 attributes=whitelist_attrs,
-                                 styles=whitelist_styles,
-                                 protocols=whitelist_protocols,
-                                 strip=strip,
-                                 filters=linkify,
-                                 )
+        # Sanitize html if wanted
+        if getattr(settings, 'MARKDOWNIFY_BLEACH', True):
 
-        html = cleaner.clean(html)
+            cleaner = bleach.Cleaner(tags=whitelist_tags,
+                                     attributes=whitelist_attrs,
+                                     styles=whitelist_styles,
+                                     protocols=whitelist_protocols,
+                                     strip=strip,
+                                     filters=linkify,
+                                     )
 
-    return mark_safe(html)
+            html = cleaner.clean(html)
+
+        return mark_safe(html)
+    return markdownify
+
+def custom_markdownify_maker(tags_to_exclude=[], attrs_to_exclude=[], styles_to_exclude=[], protocols_to_exclude=[]):
+    whitelist_tags = getattr(settings, 'MARKDOWNIFY_WHITELIST_TAGS', bleach.sanitizer.ALLOWED_TAGS)
+    tags = list(set(whitelist_tags) - set(tags_to_exclude))
+
+    whitelist_attrs = getattr(settings, 'MARKDOWNIFY_WHITELIST_ATTRS', bleach.sanitizer.ALLOWED_ATTRIBUTES)
+    attrs = list(set(whitelist_attrs) - set(attrs_to_exclude))
+
+    whitelist_styles = getattr(settings, 'MARKDOWNIFY_WHITELIST_STYLES', bleach.sanitizer.ALLOWED_STYLES)
+    styles = list(set(whitelist_styles) - set(styles_to_exclude))
+
+    whitelist_protocols = getattr(settings, 'MARKDOWNIFY_WHITELIST_PROTOCOLS', bleach.sanitizer.ALLOWED_PROTOCOLS)
+    protocols = list(set(whitelist_protocols) - set(protocols_to_exclude))
+
+
+    return custom_markdownify(tags, attrs, styles, protocols)
+
+
+register.filter("markdownify", custom_markdownify_maker())
